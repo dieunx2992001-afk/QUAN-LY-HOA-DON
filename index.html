@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>Nhập liệu Hóa đơn — Xuất Excel</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --primary: #10a76b;
+    --primary-dark: #0c8f5a;
+    --primary-soft: #e6f7ef;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --border: #e2e5e9;
+    --border-soft: #eef0f2;
+    --bg: #f4f5f7;
+    --hover-row: #f0fdf6;
+    --selected-row: #d7f5e6;
+  }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 11.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: white;
+    color: var(--ink);
+    padding: 8px 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+  }
+  header .titleBlock { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; flex: 1; }
+  header h1 { font-size: 13px; margin: 0; font-weight: 700; letter-spacing: -0.01em; color: var(--primary-dark); }
+  header p { margin: 0; font-size: 10.5px; color: var(--muted); }
+  header #openTaxBtn {
+    background: var(--primary);
+    color: white;
+    border: 1px solid var(--primary);
+    align-self: center;
+    padding: 5px 12px;
+  }
+  header #openTaxBtn:hover { background: var(--primary-dark); }
+  main {
+    max-width: 1280px;
+    margin: 14px auto;
+    padding: 0 16px 40px;
+  }
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .card h2 {
+    font-size: 11.5px;
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .card h2 .count-badge {
+    font-weight: 600;
+    font-size: 10px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    border: 1px solid #b7e8cf;
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px 10px;
+  }
+  .form-grid .full { grid-column: 1 / -1; }
+  label {
+    display: block;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  input, select {
+    width: 100%;
+    padding: 4px 7px;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 11px;
+    background: white;
+    color: var(--ink);
+    font-family: inherit;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(16,167,107,0.12);
+  }
+  .toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 9px;
+  }
+  button {
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: white; color: #374151; border-color: #d1d5db; }
+  .btn-secondary:hover { background: #f3f4f6; }
+  .btn-danger { background: white; color: #b91c1c; border-color: #fecaca; }
+  .btn-danger:hover { background: #fef2f2; }
+  .btn-danger-row { background: transparent; color: #b91c1c; border: none; padding: 2px 6px; font-weight: 500; }
+  .btn-danger-row:hover { background: #fef2f2; }
+
+  /* --- Tab lọc theo loại hóa đơn (giống 2 tab trên trang GDT thật) --- */
+  .typeTabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    width: fit-content;
+  }
+  .typeTab {
+    background: transparent;
+    color: #4b5563;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 5px 11px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .typeTab:hover { background: #f3f4f6; }
+  .typeTab.active {
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    font-weight: 600;
+  }
+  .typeTab .tab-count {
+    font-size: 9.5px;
+    font-weight: 700;
+    background: rgba(0,0,0,0.06);
+    border-radius: 999px;
+    padding: 1px 6px;
+  }
+  .typeTab.active .tab-count { background: #b7e8cf; color: var(--primary-dark); }
+
+  /* --- Thanh công cụ: tìm kiếm + lọc ngày + nhập/xuất --- */
+  .filterBar {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 2px;
+  }
+  .filterBar .grow { flex: 1 1 200px; min-width: 160px; }
+  .filterBar .fixed { width: 130px; }
+  .actionBar {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border-soft);
+  }
+  #fileInput, #zipInput, #folderInput { display: none; }
+
+  .notice {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 10.5px;
+    margin-bottom: 12px;
+    line-height: 1.45;
+  }
+
+  #tableWrap, #detailTableWrap {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 440px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f6f7f8;
+    border-bottom: 1.5px solid var(--border);
+    padding: 5px 7px;
+    font-weight: 700;
+    color: #374151;
+    text-align: left;
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 4px 7px;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+  }
+  tbody tr.invoice-row:hover { background: var(--hover-row); cursor: pointer; }
+  tbody tr.invoice-row.selected { background: var(--selected-row); }
+  tfoot td {
+    font-weight: 700;
+    background: #f6f7f8;
+    padding: 5px 7px;
+    border-top: 2px solid var(--border);
+  }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .type-pill {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .type-pill.hddt { background: #eff6ff; color: #1d4ed8; }
+  .type-pill.mtt { background: #f0fdf4; color: #15803d; }
+
+  .summary-bar {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .summary-bar b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  #fileInput, #zipInput, #folderInput { display: none; }
+  .hint { font-size: 10.5px; color: #9ca3af; margin-top: 6px; line-height: 1.45; }
+  .empty-state { color: #9ca3af; font-size: 12px; padding: 20px 16px; text-align: center; }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--ink);
+    color: white;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    display: none;
+    max-width: 360px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="titleBlock">
+    <h1>📝 Quản lý Hóa đơn đầu vào</h1>
+    <p>Nhập từ ZIP/XML hoặc gõ tay, xem chi tiết hàng hóa, xuất Excel có kẻ khung đúng chuẩn.</p>
+  </div>
+  <button id="openTaxBtn">🌐 Mở cổng Thuế</button>
+</header>
+
+<main>
+
+  <div class="typeTabs">
+    <button class="typeTab active" data-type="">Tất cả <span class="tab-count" id="countAll">0</span></button>
+    <button class="typeTab" data-type="Máy tính tiền">🧾 Hóa đơn máy tính tiền <span class="tab-count" id="countMtt">0</span></button>
+    <button class="typeTab" data-type="Hóa đơn điện tử">📄 Hóa đơn điện tử <span class="tab-count" id="countHddt">0</span></button>
+  </div>
+
+  <div class="card">
+    <div class="filterBar">
+      <div class="grow">
+        <label>Tìm kiếm</label>
+        <input type="text" id="search" placeholder="Số HĐ, MST, nhà cung cấp, tên hàng..." />
+      </div>
+      <div class="fixed">
+        <label>Lọc từ ngày</label>
+        <input type="date" id="filterFrom" />
+      </div>
+      <div class="fixed">
+        <label>Đến ngày</label>
+        <input type="date" id="filterTo" />
+      </div>
+      <div>
+        <button class="btn-secondary" id="clearFilterBtn">Bỏ lọc</button>
+      </div>
+    </div>
+    <div class="actionBar">
+      <button class="btn-secondary" id="importZipBtn">📦 Nhập từ file ZIP/XML hóa đơn</button>
+      <input type="file" id="zipInput" accept=".zip,.xml" multiple />
+      <button class="btn-secondary" id="importFolderBtn">📁 Nhập cả thư mục (ZIP/XML)</button>
+      <input type="file" id="folderInput" webkitdirectory directory multiple />
+      <button class="btn-secondary" id="importBtn">📥 Nhập từ file Excel có sẵn</button>
+      <input type="file" id="fileInput" accept=".xlsx" />
+      <button class="btn-secondary" id="exportBtn">📤 Xuất Excel theo bộ lọc (.xlsx)</button>
+      <button class="btn-secondary" id="exportPdfBtn">⬇️ Tải PDF theo bộ lọc</button>
+      <button class="btn-danger" id="clearBtn">🗑 Xóa hết</button>
+    </div>
+  </div>
+
+  <div class="notice">
+    💡 Có sẵn file .zip đã tải từ trang GDT (nút "Xuất xml")? Bấm "📦 Nhập từ file ZIP/XML hóa đơn" và chọn NHIỀU file cùng lúc (Ctrl/Shift + click trong hộp thoại chọn file), hoặc bấm "📁 Nhập cả thư mục (ZIP/XML)" để chọn LUÔN cả thư mục chứa (kể cả có thư mục con bên trong, ví dụ thư mục theo ngày) — không cần bấm chọn từng file — công cụ tự đọc đủ các trường, tự nhận biết "Hóa đơn điện tử" hay "Máy tính tiền", kể cả "Địa chỉ đơn vị mua hàng" mà cách gõ tay/dò trang không có.
+    ✅ Dữ liệu <strong>tự động lưu lại trên trình duyệt của máy này</strong> (kể cả bản xem/in gốc, nút "🖨 PDF") — đóng tab/tắt trình duyệt, thậm chí <strong>xoá hẳn file .zip/.xml gốc đã nhập</strong> đều KHÔNG mất, vì dữ liệu đã được đọc và lưu vào trình duyệt ngay lúc nhập rồi, không phụ thuộc file gốc nữa. Chỉ mất khi tự bấm "🗑 Xóa hết" hoặc gỡ cài đặt tiện ích. 🔁 Hóa đơn trùng (cùng MST + Ký hiệu + Số hóa đơn) tự bỏ qua, không nhập/đọc lại.
+  </div>
+
+  <div class="card">
+    <h2>Danh sách hóa đơn <span class="count-badge"><span id="rowCount">0</span> dòng</span></h2>
+    <div id="tableWrap">
+      <div class="empty-state">Chưa có dòng nào — nhập file ZIP/XML hoặc điền form "Thêm 1 dòng hóa đơn" phía dưới.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Chi tiết hóa đơn <span class="count-badge" id="selectedBadge" style="display:none;"></span></h2>
+    <div id="detailTableWrap">
+      <div class="empty-state" id="emptyDetail">Chọn một hóa đơn phía trên để xem chi tiết hàng hóa.</div>
+    </div>
+    <div class="summary-bar" id="detailSummary" style="display:none;">
+      <span>Số lượng: <b id="dQty">0</b></span>
+      <span>Thành tiền: <b id="dAmount">0</b></span>
+      <span>Chiết khấu: <b id="dDiscount">0</b></span>
+      <span>Thuế GTGT: <b id="dTax">0</b></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Thêm 1 dòng hóa đơn (gõ tay)</h2>
+    <div class="form-grid">
+      <div>
+        <label>Ký hiệu</label>
+        <input type="text" id="f_kyHieu" placeholder="VD: 1 - K26THA" />
+      </div>
+      <div>
+        <label>Ngày hóa đơn</label>
+        <input type="date" id="f_ngay" />
+      </div>
+      <div>
+        <label>Số hóa đơn</label>
+        <input type="text" id="f_soHD" placeholder="VD: 27669" />
+      </div>
+      <div>
+        <label>Mã số thuế</label>
+        <input type="text" id="f_mst" placeholder="VD: 0300792451-007" />
+      </div>
+      <div class="full">
+        <label>Nhà cung cấp</label>
+        <input type="text" id="f_nhaCungCap" placeholder="Tên đơn vị bán hàng" />
+      </div>
+      <div class="full">
+        <label>Địa chỉ đơn vị mua hàng</label>
+        <input type="text" id="f_diaChi" placeholder="Địa chỉ công ty mình (bên mua)" />
+      </div>
+      <div>
+        <label>Tổng tiền thanh toán</label>
+        <input type="number" id="f_tongTien" placeholder="VD: 1695750" />
+      </div>
+      <div>
+        <label>Trạng thái hóa đơn</label>
+        <select id="f_trangThai">
+          <option>Hóa đơn mới</option>
+          <option>Hóa đơn đã hủy</option>
+          <option>Hóa đơn thay thế</option>
+          <option>Hóa đơn bị thay thế</option>
+          <option>Hóa đơn điều chỉnh</option>
+          <option>Hóa đơn bị điều chỉnh</option>
+          <option value="__khac">Khác...</option>
+        </select>
+      </div>
+      <div id="trangThaiKhacWrap" style="display:none;">
+        <label>Ghi rõ trạng thái</label>
+        <input type="text" id="f_trangThaiKhac" />
+      </div>
+      <div class="full">
+        <label>Hộ kinh doanh (bên mua) — để tự điền cột "Tên hộ kinh doanh"</label>
+        <select id="f_hoKinhDoanh">
+          <option value="">-- Không xác định --</option>
+        </select>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button class="btn-primary" id="addBtn">➕ Thêm dòng</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Danh mục Hộ kinh doanh (quy đổi Mã số thuế người mua → Tên hộ)</h2>
+    <div class="form-grid" style="grid-template-columns: 1fr 2fr auto;">
+      <div>
+        <label>Mã số thuế</label>
+        <input type="text" id="hkd_mst" placeholder="VD: 056193015207" />
+      </div>
+      <div>
+        <label>Tên hộ kinh doanh</label>
+        <input type="text" id="hkd_ten" placeholder="VD: HKD J24 MART 1-24H" />
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button class="btn-primary" id="hkdAddBtn">➕ Thêm</button>
+      </div>
+    </div>
+    <div id="hkdListWrap" style="margin-top:12px;"></div>
+    <div class="hint">Cột "Tên hộ kinh doanh" sẽ tự thêm vào cuối bảng và file Excel xuất ra, dựa vào Mã số thuế người mua đọc được từ file ZIP/XML hoặc dòng nhập tay. Danh mục này dùng chung cho cả phần "Chạy tự động" ở popup.</div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="vendor/exceljs.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/qrcode-gen.js"></script>
+<script src="manage.js"></script>
+</body>
+</html>

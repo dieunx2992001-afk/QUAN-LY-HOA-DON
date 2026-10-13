@@ -291,28 +291,29 @@
 
 <main>
 <div class="card" id="firebasePanel">
-<h2>☁ Đồng bộ Firebase <span id="accountName">Chưa đăng nhập</span></h2>
+<h2>☁ Đồng bộ Firebase <span id="accountName">Anonymous</span></h2>
 <div class="actionBar" style="align-items:center;gap:8px">
-<input id="loginEmail" type="email" autocomplete="username" placeholder="Email tài khoản" style="width:220px" aria-label="Email đăng nhập">
-<input id="loginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu" style="width:180px" aria-label="Mật khẩu">
-<button class="btn-primary" id="loginBtn">Đăng nhập</button>
-<button class="btn-secondary" id="logoutBtn" disabled>Đăng xuất</button>
+<input id="loginEmail" type="text" autocomplete="off" spellcheck="false" placeholder="Dán mã kho dữ liệu" style="width:300px" aria-label="Mã kho dữ liệu">
+
+<button class="btn-primary" id="loginBtn">Mở kho</button><button class="btn-secondary" id="newWorkspace">Tạo kho mới</button><button class="btn-secondary" id="copyWorkspace">Sao chép mã kho</button>
+<button class="btn-secondary" id="logoutBtn" disabled>Rời kho</button>
 <button class="btn-secondary" id="syncNow" disabled>Đồng bộ lại</button>
-<button class="btn-secondary" id="migrateBtn" disabled>Gộp dữ liệu chưa đăng nhập</button>
+<button class="btn-secondary" id="migrateBtn" disabled>Gộp dữ liệu trên máy</button>
 </div>
 <p id="syncStatus" role="status" aria-live="polite" style="font-size:12px;color:#0c8f5a;margin:12px 0">Đang khởi động…</p>
-<p>Đăng nhập cùng một tài khoản trên các máy để dùng chung hóa đơn và danh mục hộ kinh doanh. Dữ liệu chưa đăng nhập chỉ lưu trên máy. Khi xóa hóa đơn đã đồng bộ, các máy khác cũng nhận thao tác xóa.</p>
+<p>Anonymous tự đăng nhập, không cần email hay mật khẩu. Máy đầu bấm Tạo kho mới; máy khác dán cùng mã kho và bấm Mở kho. Lưu mã kho ở nơi riêng: ai có mã đều có thể đọc, thêm và xóa dữ liệu trong kho. Mất mã kho thì không thể tìm lại kho qua tài khoản ẩn danh. Xóa hóa đơn cũng đồng bộ sang các máy đang mở cùng kho.</p>
 <details><summary>Thiết lập Firebase lần đầu</summary>
-<ol style="line-height:1.8"><li>Trong dự án <b>quan-ly-hoa-don-cua-dieu</b>, mở <b>Authentication → Get started → Sign-in method → Email/Password</b> và bật Email/Password.</li>
-<li>Mở <b>Authentication → Users → Add user</b>, tạo email và mật khẩu dùng đăng nhập trên website. Dùng chung tài khoản này trên các máy cần đồng bộ.</li>
+<ol style="line-height:1.8"><li>Trong dự án <b>quan-ly-hoa-don-cua-dieu</b>, mở <b>Authentication → Get started → Sign-in method → Anonymous</b>, bật Enable rồi Save.</li>
 <li>Vào <b>Authentication → Settings → Authorized domains → Add domain</b>, thêm <b>dieunx2992001-afk.github.io</b>.</li>
 <li>Vào <b>Firestore Database → Create database</b>, chọn <b>Standard edition</b>, chọn vị trí rồi tạo ở <b>Production mode</b>.</li>
-<li>Ở tab <b>Rules</b>, dùng quy tắc dưới đây và bấm <b>Publish</b>. Nếu dự án đã có quy tắc khác, thêm riêng phần match /j24InvoiceUsers vào quy tắc hiện tại để giữ các phần đang dùng.</li></ol>
+<li>Ở tab <b>Rules</b>, dùng quy tắc dưới đây và bấm <b>Publish</b>. Nếu dự án đã có quy tắc khác, thêm riêng phần match /j24InvoiceWorkspaces vào quy tắc hiện tại để giữ các phần đang dùng.</li></ol>
 <pre style="white-space:pre-wrap;background:#f4f5f7;padding:12px;user-select:all">rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /j24InvoiceUsers/{uid}/records/{recordId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    match /j24InvoiceWorkspaces/{workspaceId}/records/{recordId} {
+      allow read, write: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && workspaceId.matches('^[a-f0-9]{32,64}$');
     }
   }
 }</pre>
@@ -356,7 +357,7 @@ service cloud.firestore {
     </div>
   </div>
 
-  <div class="notice">💡 Nhập ZIP/XML, Excel hoặc gõ tay. Hóa đơn và bản xem/in gốc tự lưu trên trình duyệt này. Khi đã đăng nhập, các thay đổi sẽ được gửi lên Firebase và nhận trên máy khác cùng tài khoản. Mất mạng thì giữ thao tác chờ trên máy; xem trạng thái đồng bộ phía trên. Xóa dữ liệu trang web có thể làm mất dữ liệu chưa gửi, nên chờ báo đã đồng bộ hoặc xuất bản sao trước. Nút PDF từng dòng mở hộp thoại in; nút “Tải bản in (ZIP)” tải các bản HTML để mở và lưu thành PDF.</div>
+  <div class="notice">💡 Nhập ZIP/XML, Excel hoặc gõ tay. Hóa đơn và bản xem/in gốc tự lưu trên trình duyệt này. Khi đã mở kho dữ liệu, các thay đổi sẽ được gửi lên Firebase và nhận trên máy khác dùng cùng mã kho. Mất mạng thì giữ thao tác chờ trên máy; xem trạng thái đồng bộ phía trên. Xóa dữ liệu trang web có thể làm mất dữ liệu chưa gửi, nên chờ báo đã đồng bộ hoặc xuất bản sao trước. Nút PDF từng dòng mở hộp thoại in; nút “Tải bản in (ZIP)” tải các bản HTML để mở và lưu thành PDF.</div>
 
   <div class="card">
     <h2>Danh sách hóa đơn <span class="count-badge"><span id="rowCount">0</span> dòng</span></h2>
@@ -506,7 +507,7 @@ async function flush(){
       const uid=SYNC.uid;
       const payload=op.value===null?null:await pack(op.value);
       if(payload&&payload.length>850000)throw Error('Hóa đơn '+op.id+' quá lớn để đồng bộ. Dữ liệu vẫn lưu trên máy; hãy xuất bản sao.');
-      await SYNC.db.collection('j24InvoiceUsers').doc(uid).collection('records').doc(await digest(key)).set({key:op.key,recordId:op.id,payload,deleted:op.value===null,revision:op.revision,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      await SYNC.db.collection('j24InvoiceWorkspaces').doc(uid).collection('records').doc(await digest(key)).set({key:op.key,recordId:op.id,payload,deleted:op.value===null,revision:op.revision,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
       if(SYNC.uid!==uid)break;
       if(SYNC.pending[key]?.revision===op.revision)delete SYNC.pending[key];
       await persist();
@@ -521,17 +522,18 @@ async function refreshUI(){
 }
 async function account(user){
   await SYNC.chain.catch(()=>{});
-  if(SYNC.unsub)SYNC.unsub();SYNC.ready=false;SYNC.uid=user?.uid||null;
-  document.getElementById('accountName').textContent=user?.email||'Chưa đăng nhập';
-  document.getElementById('logoutBtn').disabled=!user;
-  document.getElementById('syncNow').disabled=!user;
-  document.getElementById('migrateBtn').disabled=!user;
+  if(SYNC.unsub)SYNC.unsub();SYNC.ready=false;SYNC.uid=user ? localStorage.getItem('j24InvoiceWorkspace') : null;
+  document.getElementById('accountName').textContent=SYNC.uid ? 'Anonymous • kho '+SYNC.uid.slice(0,8)+'…' : 'Anonymous • chưa chọn kho';
+  document.getElementById('logoutBtn').disabled=!SYNC.uid;
+  document.getElementById('syncNow').disabled=!SYNC.uid;
+  document.getElementById('migrateBtn').disabled=!SYNC.uid;
   const saved=await cacheGet(scope());SYNC.values=saved?.values||{manageInvoiceRows:[],hkdMap:{}};SYNC.pending=saved?.pending||{};
   await refreshUI();
-  if(!user){status('Lưu trên máy — đăng nhập để đồng bộ');return;}
+  document.getElementById('loginEmail').value=SYNC.uid||'';
+  if(!SYNC.uid){status('Lưu trên máy — tạo kho mới hoặc nhập mã kho để đồng bộ');return;}
   status('Đang đọc dữ liệu Firebase…');
-  const uid=user.uid;
-  SYNC.unsub=SYNC.db.collection('j24InvoiceUsers').doc(uid).collection('records').onSnapshot(snap=>{
+  const uid=SYNC.uid;
+  SYNC.unsub=SYNC.db.collection('j24InvoiceWorkspaces').doc(uid).collection('records').onSnapshot(snap=>{
     if(snap.metadata.fromCache||snap.metadata.hasPendingWrites)return;
     SYNC.chain=SYNC.chain.then(async()=>{
       if(SYNC.uid!==uid)return;
@@ -555,26 +557,49 @@ async function bootSync(){
     if(!window.firebase)throw Error('Không tải được thư viện Firebase. Kiểm tra mạng rồi tải lại trang.');
     firebase.initializeApp(FIREBASE_CONFIG);SYNC.db=firebase.firestore();SYNC.auth=firebase.auth();
     await SYNC.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    SYNC.auth.onAuthStateChanged(user=>{void account(user).catch(e=>status(e.message));});
+    SYNC.auth.onAuthStateChanged(user=>{
+      if(!user){status('Đang đăng nhập Anonymous…');SYNC.auth.signInAnonymously().catch(e=>status('Anonymous lỗi: '+e.message));return;}
+      if(!user.isAnonymous){SYNC.auth.signOut().catch(e=>status(e.message));return;}
+      void account(user).catch(e=>status(e.message));
+    });
   }catch(e){status(e.message);}
 }
 document.getElementById('loginBtn').onclick=async()=>{
-  try{await SYNC.auth.signInWithEmailAndPassword(document.getElementById('loginEmail').value.trim(),document.getElementById('loginPassword').value);document.getElementById('loginPassword').value='';}
-  catch(e){status('Đăng nhập lỗi: '+(e?.message||e));}
+  try{
+    const code=document.getElementById('loginEmail').value.trim().toLowerCase();
+    if(!/^[a-f0-9]{32,64}$/.test(code))throw Error('Nhập nguyên mã kho được tạo bằng nút Tạo kho mới.');
+    if(!SYNC.auth?.currentUser?.isAnonymous)throw Error('Anonymous chưa kết nối. Hãy bật Anonymous trong Firebase rồi tải lại trang.');
+    await SYNC.chain.catch(()=>{});
+    if(SYNC.running)throw Error('Đang gửi dữ liệu, hãy đợi rồi đổi kho.');
+    if(Object.keys(SYNC.pending).length&&SYNC.uid&&SYNC.uid!==code&&!confirm('Kho hiện tại còn dữ liệu chưa gửi. Dữ liệu giữ trên máy theo mã kho cũ. Đổi kho?'))return;
+    localStorage.setItem('j24InvoiceWorkspace',code);
+    await account(SYNC.auth.currentUser);
+  }catch(e){status(e.message);}
+};
+document.getElementById('newWorkspace').onclick=()=>{
+  if(!SYNC.auth?.currentUser?.isAnonymous){status('Hãy đợi Anonymous kết nối hoặc kiểm tra cài đặt Firebase.');return;}
+  const bytes=crypto.getRandomValues(new Uint8Array(16));
+  document.getElementById('loginEmail').value=[...bytes].map(v=>v.toString(16).padStart(2,'0')).join('');
+  document.getElementById('loginBtn').click();
+};
+document.getElementById('copyWorkspace').onclick=async()=>{
+  if(!SYNC.uid){status('Chưa chọn kho dữ liệu.');return;}
+  try{await navigator.clipboard.writeText(SYNC.uid);status('Đã sao chép mã kho. Dán mã này trên máy khác để đồng bộ.');}catch(e){document.getElementById('loginEmail').value=SYNC.uid;document.getElementById('loginEmail').select();status('Chọn mã trong ô và nhấn Ctrl+C để sao chép.');}
 };
 document.getElementById('logoutBtn').onclick=async()=>{
-  await SYNC.chain;
-  if(SYNC.running){status('Đang gửi dữ liệu, hãy đợi rồi đăng xuất.');return;}
-  if(Object.keys(SYNC.pending).length&&!confirm('Còn dữ liệu chưa đồng bộ. Dữ liệu giữ trên máy theo tài khoản này. Đăng xuất?'))return;
-  await SYNC.auth.signOut();
+  await SYNC.chain.catch(()=>{});
+  if(SYNC.running){status('Đang gửi dữ liệu, hãy đợi rồi rời kho.');return;}
+  if(Object.keys(SYNC.pending).length&&!confirm('Còn dữ liệu chưa gửi. Dữ liệu giữ trên máy theo mã kho này. Rời kho?'))return;
+  localStorage.removeItem('j24InvoiceWorkspace');document.getElementById('loginEmail').value='';
+  await account(SYNC.auth.currentUser);
 };
 document.getElementById('syncNow').onclick=()=>{void flush();};
 document.getElementById('migrateBtn').onclick=async()=>{
   try{
-    if(!SYNC.uid||!SYNC.ready)throw Error('Hãy đăng nhập và đợi Firebase kết nối.');
+    if(!SYNC.uid||!SYNC.ready)throw Error('Hãy chọn kho và đợi Firebase kết nối.');
     const guest=await cacheGet('guest');
     if(!guest?.values?.manageInvoiceRows?.length){status('Không có hóa đơn chưa đăng nhập để chuyển.');return;}
-    if(!confirm('Gộp '+guest.values.manageInvoiceRows.length+' hóa đơn lưu trên máy vào tài khoản đang đăng nhập?'))return;
+    if(!confirm('Gộp '+guest.values.manageInvoiceRows.length+' hóa đơn lưu trên máy vào kho đang mở?'))return;
     const map=entries('manageInvoiceRows',SYNC.values.manageInvoiceRows);
     for(const r of guest.values.manageInvoiceRows)if(!map[recordKey(r)])map[recordKey(r)]=r;
     await storageSet({manageInvoiceRows:Object.values(map),hkdMap:{...guest.values.hkdMap,...SYNC.values.hkdMap}});await refreshUI();

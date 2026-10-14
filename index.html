@@ -1860,21 +1860,43 @@ function fixSignatureStampOverflow(html) {
  * trên một trang: cho phép phân trang giữa các dòng và lặp tiêu đề bảng. */
 function normalizeInvoicePrintLayout(html) {
   if (!html) return html;
-  // Thay phiên bản cũ nếu bản HTML đã được chuẩn hóa trước đó.
   html = html.replace(/<style id="invoice-print-layout">[\s\S]*?<\/style>/gi, "");
+  // Đánh dấu bảng hàng hóa theo tiêu đề, áp dụng được cho cả HTML đã lưu.
+  // Giữ nguyên dữ liệu, các cột và chế độ tài liệu của bản gốc.
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    if (doc.title === "Hóa Đơn Điện Tử" && !/Mã cửa hàng|Số tài khoản/.test(doc.body.textContent)) {
+      doc.documentElement.setAttribute("data-invoice-source", "xml");
+    }
+    doc.querySelectorAll("table").forEach(table => {
+      const header = table.querySelector("thead tr") || table.rows[0];
+      if (!header || header.cells.length !== 10) return;
+      const label = header.textContent.replace(/\s+/g, " ");
+      if (!/STT/i.test(label) || !/Đơn giá/i.test(label)) return;
+      table.classList.add("invoice-items-print");
+      Array.from(table.rows).forEach(row => {
+        [0, 5, 6, 7, 8, 9].forEach(i => {
+          if (row.cells[i] && row.cells[i].tagName === "TD") {
+            row.cells[i].classList.add("invoice-number-print");
+          }
+        });
+      });
+    });
+    html = (doc.doctype ? "<!DOCTYPE html>\n" : "") + doc.documentElement.outerHTML;
+  } catch (e) { /* Mẫu lạ vẫn có thể in với quy tắc phân trang chung. */ }
   const style = `<style id="invoice-print-layout">
-    @page { size: A4 portrait; margin: 8mm !important; }
+    @page { size: A4 portrait; margin: 5mm !important; }
     @media print {
       html, body { width: auto !important; height: auto !important;
         min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
-      body { font-family: "Times New Roman", serif; font-size: 11pt; }
+      body { font-family: "Times New Roman", serif; font-size: 13pt; }
       .print-page, .main-page { width: auto !important; max-width: none !important;
         height: auto !important; min-height: 0 !important; margin: 0 !important;
         overflow: visible !important; box-shadow: none !important;
         break-inside: auto !important; page-break-inside: auto !important; }
-      .main-page { padding: 4mm !important; line-height: 1.3 !important; }
-      .content-info, .page-break, .table-horizontal-wrapper,
-      table, tbody { break-inside: auto !important; page-break-inside: auto !important;
+      .main-page { padding: 3mm !important; line-height: 1.4 !important; }
+      .content-info, .page-break, table, tbody {
+        break-inside: auto !important; page-break-inside: auto !important;
         break-before: auto !important; page-break-before: auto !important;
         break-after: auto !important; page-break-after: auto !important; }
       .content-info { display: block !important; overflow: visible !important; }
@@ -1883,22 +1905,43 @@ function normalizeInvoicePrintLayout(html) {
       thead, table thead { display: table-header-group !important; }
       tbody { display: table-row-group !important; }
       tr { break-inside: avoid !important; page-break-inside: avoid !important; }
-      td, th { height: auto !important; white-space: normal !important;
-        overflow-wrap: anywhere; padding: 4px 3px !important;
-        font-size: 9.5pt !important; line-height: 1.25 !important;
-        min-width: 0 !important; max-width: none !important;
+      td, th { height: auto !important; min-width: 0 !important; max-width: none !important;
+        white-space: normal !important; overflow-wrap: normal !important;
+        word-break: normal !important; padding: 6px 4px !important;
+        font-size: 12pt !important; line-height: 1.3 !important;
         vertical-align: top !important; }
-      .data-item, .data-item-auto-w, .data-text { font-size: 11pt !important; }
-      .table-horizontal-wrapper { display: block !important; padding-top: 0 !important; }
-      .table-horizontal-wrapper > div { width: auto !important; margin: 0 !important; }
-      .res-tb { margin: 6px 0 !important; }
-      .res-tb th, .res-tb td { width: auto !important; }
-      .res-tb th.tb-thh { width: 24% !important; }
+      .data-item, .data-item-auto-w, .data-text { font-size: 13pt !important; }
+      .res-tb { margin: 10px 0 !important; }
+      .invoice-items-print { table-layout: fixed !important; }
+      .invoice-items-print th, .invoice-items-print td { width: auto !important; }
+      .invoice-items-print tr > :nth-child(1) { width: 6% !important; }
+      .invoice-items-print tr > :nth-child(2) { width: 9% !important; }
+      .invoice-items-print tr > :nth-child(3) { width: 10% !important; }
+      .invoice-items-print tr > :nth-child(4) { width: 20% !important; }
+      .invoice-items-print tr > :nth-child(5) { width: 7% !important; }
+      .invoice-items-print tr > :nth-child(6) { width: 6% !important; }
+      .invoice-items-print tr > :nth-child(7) { width: 12% !important; }
+      .invoice-items-print tr > :nth-child(8) { width: 6% !important; }
+      .invoice-items-print tr > :nth-child(9) { width: 7% !important; }
+      .invoice-items-print tr > :nth-child(10) { width: 17% !important; }
+      .invoice-items-print .invoice-number-print { white-space: nowrap !important;
+        text-align: right !important; }
+      .invoice-items-print tr > :first-child { text-align: center !important; }
+      .invoice-items-print td:nth-child(4) { overflow-wrap: break-word !important; }
+      .table-horizontal-wrapper { display: flex !important; gap: 3mm;
+        padding-top: 0 !important; break-inside: auto !important;
+        page-break-inside: auto !important; align-items: flex-start; }
+      .table-horizontal-wrapper > div { min-width: 0 !important; margin: 0 !important; }
+      .table-horizontal-wrapper > div:first-child { flex: 0 0 35%; }
+      .table-horizontal-wrapper > div:last-child { flex: 1; }
+      .table-horizontal-wrapper td, .table-horizontal-wrapper th { width: auto !important; }
       .heading-content, .sign-row, .sign-flex, .ft-sign {
         break-inside: avoid !important; page-break-inside: avoid !important; }
-      .ft-sign, .sign-row { padding-top: 8px !important; }
-      .main-title { font-size: 17pt !important; margin: 8px 0 !important; }
+      .ft-sign, .sign-row { padding-top: 14px !important; }
+      .main-title { font-size: 20pt !important; margin: 12px 0 !important; }
       .bg-container, #gdtPrintWatermark { pointer-events: none !important; }
+      html[data-invoice-source="xml"] #gdtPrintWatermark {
+        background-size: 250% !important; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>`;
@@ -2831,7 +2874,7 @@ async function buildInvoicePreviewHtmlFromXml(xmlText) {
     // vào đây, trang sẽ chuyển sang "Standards Mode" khiến bảng hàng hóa bị
     // giãn cao hơn ~30% (xem giải thích đầy đủ ở injectQrCode phía trên,
     // cùng 1 nguyên nhân/cách sửa) và PDF dư trang so với bản .zip.
-    const html = `<html>
+    const html = `<html data-invoice-source="xml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>Hóa Đơn Điện Tử</title>

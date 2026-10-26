@@ -618,6 +618,9 @@ window.addEventListener('beforeunload',e=>{if(Object.keys(SYNC.pending).length&&
 let rows = []; // { id, loai, kyHieu, ngay (Date|string), soHD, mst, nhaCungCap, diaChi, tgTCThue?, tgTThue?, chietKhau, tongTien (number|string), trangThai, mstNguoiMua, tenHoOverride, invoicePdfUrl? }
 let nextRowId = 1;
 let selectedRowId = null; // dòng hóa đơn đang chọn để xem "Chi tiết hóa đơn" ở khung riêng bên dưới
+let currentPage = 1;
+const PAGE_SIZE = 100;
+let filterTimer;
 let typeFilterState = ""; // "" = Tất cả | "Hóa đơn điện tử" | "Máy tính tiền" — theo tab đang chọn
 
 // ============================= LƯU TRỮ TRÊN MÁY (tự động, không cần bấm gì) ================
@@ -666,9 +669,9 @@ function invoiceDateFromXml(xml) {
   } catch (e) { return ""; }
 }
 function restoreInvoiceDate(o) {
+  if (o.ngayYmd) return invoiceCalendarDate(o.ngayYmd);
   const original = invoiceDateFromXml(o.invoiceXmlText);
   if (original) return original;
-  if (o.ngayYmd) return invoiceCalendarDate(o.ngayYmd);
   if (!o.ngayIso) return "";
   // Dữ liệu cũ lưu ISO có múi giờ: khôi phục ngày theo giờ Việt Nam.
   if (/T.*(?:Z|[+-]\d{2}:?\d{2})$/.test(o.ngayIso)) {
@@ -731,7 +734,7 @@ function deserializeRow(o) {
     // từ phiên trước) đã hết hạn từ lúc đóng tab/trình duyệt, không dùng lại
     // được nữa, nên KHÔNG lưu chính blob: URL, chỉ lưu HTML gốc rồi tự dựng
     // lại URL mới mỗi lần mở trang.
-    invoicePdfUrl: o.invoicePreviewHtml ? blobUrlFromPreviewHtml(o.invoicePreviewHtml) : undefined,
+    invoicePdfUrl: undefined, // Chỉ tạo URL khi người dùng thực sự mở PDF.
   };
 }
 
@@ -992,12 +995,15 @@ function renderTable() {
     "<th>Mã số thuế</th><th>Địa chỉ mua hàng</th><th class=\"num\">Tổng thanh toán</th>" +
     "<th>Trạng thái HĐ</th><th>Tên hộ kinh doanh</th><th>PDF</th><th></th>";
   html += "</tr></thead><tbody>";
-  filtered.forEach((r, i) => {
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  currentPage = Math.min(Math.max(1,currentPage),pageCount);
+  const pageStart = (currentPage-1)*PAGE_SIZE;
+  filtered.slice(pageStart,pageStart+PAGE_SIZE).forEach((r, i) => {
     const loai = r.loai || "Hóa đơn điện tử";
     const pillClass = loai === "Máy tính tiền" ? "mtt" : "hddt";
     const selected = r.id === selectedRowId ? " selected" : "";
     html += `<tr class="invoice-row${selected}" data-id="${r.id}" title="Bấm để xem chi tiết hàng hóa">
-      <td>${i + 1}</td>
+      <td>${pageStart + i + 1}</td>
       <td><span class="type-pill ${pillClass}">${escapeHtml(loai)}</span></td>
       <td>${escapeHtml(r.kyHieu)}</td>
       <td>${escapeHtml(fmtDateForDisplay(r.ngay))}</td>
@@ -1008,12 +1014,15 @@ function renderTable() {
       <td class="num">${escapeHtml(fmtMoney(r.tongTien))}</td>
       <td>${escapeHtml(r.trangThai)}</td>
       <td>${escapeHtml(resolveTenHo(r))}</td>
-      <td>${r.invoicePdfUrl ? `<button class="btn-secondary btn-pdf-row" data-id="${r.id}">🖨 PDF</button>` : ""}</td>
+      <td>${(r.invoicePdfUrl || r.invoicePreviewHtml || r.invoiceXmlText) ? `<button class="btn-secondary btn-pdf-row" data-id="${r.id}">🖨 PDF</button>` : ""}</td>
       <td><button class="btn-danger-row" data-id="${r.id}">✕</button></td>
     </tr>`;
   });
   html += `</tbody><tfoot><tr><td colspan="8">Tổng cộng${isFiltering ? " (theo bộ lọc)" : ""}</td><td class="num">${fmtMoney(total)}</td><td colspan="4"></td></tr></tfoot></table>`;
-  wrap.innerHTML = html;
+  const paginationHtml = `<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px;background:white;position:sticky;bottom:0"><button class="btn-secondary" id="prevPage" ${currentPage===1?'disabled':''}>← Trước</button><b>Trang ${currentPage}/${pageCount} · ${filtered.length} hóa đơn</b><button class="btn-secondary" id="nextPage" ${currentPage===pageCount?'disabled':''}>Sau →</button></div>`;
+  wrap.innerHTML = html + paginationHtml;
+  wrap.querySelector('#prevPage').onclick=()=>{currentPage--;renderTable();};
+  wrap.querySelector('#nextPage').onclick=()=>{currentPage++;renderTable();};
 
   wrap.querySelectorAll(".btn-danger-row").forEach((btn) => {
     btn.addEventListener("click", (ev) => {
@@ -1026,11 +1035,20 @@ function renderTable() {
     });
   });
   wrap.querySelectorAll(".btn-pdf-row").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+    btn.addEventListener("click", async (ev) => {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
       const row = rows.find((r) => r.id === id);
-      exportInvoicePdf(row && row.invoicePdfUrl);
+      if (!row) return;
+      try {
+        btn.disabled=true; btn.textContent='Đang tạo PDF…';
+        const html = row.invoicePreviewHtml || (row.invoiceXmlText ? await buildInvoicePreviewHtmlFromXml(row.invoiceXmlText) : null);
+        if (!html) throw Error('Không tạo được bản xem từ XML');
+        const url = blobUrlFromPreviewHtml(html);
+        exportInvoicePdf(url);
+        setTimeout(()=>URL.revokeObjectURL(url),120000);
+      } catch(e) { showToast('Không mở được PDF: '+e.message,6000); }
+      finally {btn.disabled=false;btn.textContent='🖨 PDF';}
     });
   });
   // Bấm vào 1 dòng hóa đơn sẽ CHỌN dòng đó (tô sáng) và hiện chi tiết hàng
@@ -1116,16 +1134,20 @@ function buildGoodsTableHtml(hangHoa) {
   return html;
 }
 
-document.getElementById("filterFrom").addEventListener("change", renderTable);
-document.getElementById("filterTo").addEventListener("change", renderTable);
-document.getElementById("search").addEventListener("input", renderTable);
+function saveFilterState(){
+  localStorage.setItem('j24InvoiceFilters',JSON.stringify({from:document.getElementById('filterFrom').value,to:document.getElementById('filterTo').value,search:document.getElementById('search').value,type:typeFilterState}));
+}
+function filtersChanged(){currentPage=1;saveFilterState();renderTable();}
+for(const id of ['filterFrom','filterTo'])document.getElementById(id).addEventListener('change',filtersChanged);
+document.getElementById('search').addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(filtersChanged,250);});
+try {const f=JSON.parse(localStorage.getItem('j24InvoiceFilters')||'{}');document.getElementById('filterFrom').value=f.from||'';document.getElementById('filterTo').value=f.to||'';document.getElementById('search').value=f.search||'';typeFilterState=f.type||'';document.querySelectorAll('.typeTab').forEach(b=>b.classList.toggle('active',b.dataset.type===typeFilterState));}catch(e){}
 document.getElementById("clearFilterBtn").addEventListener("click", () => {
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
   document.getElementById("search").value = "";
   typeFilterState = "";
   document.querySelectorAll(".typeTab").forEach((btn) => btn.classList.toggle("active", btn.dataset.type === ""));
-  renderTable();
+  filtersChanged();
 });
 
 // Tab lọc theo loại hóa đơn ("Tất cả" / "Hóa đơn điện tử" / "Máy tính tiền")
@@ -1133,7 +1155,7 @@ document.querySelectorAll(".typeTab").forEach((btn) => {
   btn.addEventListener("click", () => {
     typeFilterState = btn.dataset.type;
     document.querySelectorAll(".typeTab").forEach((b) => b.classList.toggle("active", b === btn));
-    renderTable();
+    filtersChanged();
   });
 });
 
@@ -1445,6 +1467,8 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     const ws = wb.worksheets[0];
     const imported = [];
     const existingKeys = new Set(rows.map(rowDedupKey));
+  const existingMap = new Map(rows.map(r=>[rowDedupKey(r),r]));
+  let processedCount=0;
   let updatedXmlCount = 0;
     let dupCount = 0;
 
@@ -1521,7 +1545,7 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
       };
       const key = rowDedupKey(candidate);
       if (existingKeys.has(key)) {
-        const existing = rows.find(r => rowDedupKey(r) === key);
+        const existing = existingMap.get(key);
         if (existing) {
           existing.invoiceXmlText = xmlText;
           if (parsed.ngay) existing.ngay = parsed.ngay;
@@ -3055,14 +3079,20 @@ async function importZipXmlFiles(fileList) {
     showToast("⚠️ Không tìm thấy file .zip/.xml hóa đơn nào trong lựa chọn vừa rồi.", 5000);
     return;
   }
+  let processedCount = 0;
   let okCount = 0;
   let failCount = 0;
   let dupCount = 0;
   const imported = [];
   const existingKeys = new Set(rows.map(rowDedupKey));
+  const existingMap = new Map(rows.map(r=>[rowDedupKey(r),r]));
   let updatedXmlCount = 0;
 
   for (const file of files) {
+    if (processedCount++ % 20 === 0) {
+      status(`Đang nhập XML: ${processedCount}/${files.length} tệp · mới ${okCount} · trùng ${dupCount}`);
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
     try {
       let xmlText = null;
       let zip = null;
@@ -3084,7 +3114,7 @@ async function importZipXmlFiles(fileList) {
       parsed.invoiceXmlText = xmlText;
       const key = rowDedupKey(parsed);
       if (existingKeys.has(key)) {
-        const existing = rows.find(r => rowDedupKey(r) === key);
+        const existing = existingMap.get(key);
         if (existing && !existing.invoiceXmlText) { existing.invoiceXmlText=xmlText; updatedXmlCount++; }
         // Hóa đơn này (cùng MST + Ký hiệu + Số hóa đơn) đã có sẵn trong danh
         // sách (do nhập trước đó hoặc trùng file trong chính lần chọn này) —
@@ -3093,20 +3123,7 @@ async function importZipXmlFiles(fileList) {
         continue;
       }
       existingKeys.add(key);
-      try {
-        // .zip (có invoice.html gốc) → dựng bản xem trước từ CHÍNH file gốc
-        // đó (chính xác tuyệt đối, giữ nguyên mọi chi tiết GDT tạo ra).
-        // .xml LẺ (không có invoice.html kèm theo) → TỰ DỰNG bản xem trước
-        // từ dữ liệu XML (xem buildInvoicePreviewHtmlFromXml phía trên) —
-        // trước đây trường hợp này KHÔNG có nút "🖨 PDF" luôn.
-        const previewHtml = zip ? await buildInvoicePreviewHtml(zip) : await buildInvoicePreviewHtmlFromXml(xmlText);
-        if (previewHtml) {
-          parsed.invoicePreviewHtml = previewHtml; // lưu lại LÂU DÀI (chrome.storage.local)
-          parsed.invoicePdfUrl = blobUrlFromPreviewHtml(previewHtml); // dùng ngay trong phiên này
-        }
-      } catch (e2) {
-        /* không tạo được bản xem trước — vẫn giữ dữ liệu hóa đơn, chỉ là không có nút Xuất PDF */
-      }
+      // Không tạo hàng nghìn bản HTML/PDF khi nhập: dựng theo yêu cầu khi bấm PDF.
       parsed.id = nextRowId++;
       imported.push(parsed);
       okCount++;
@@ -3118,8 +3135,9 @@ async function importZipXmlFiles(fileList) {
   if (imported.length > 0 || updatedXmlCount > 0) {
     rows = rows.concat(imported);
     renderTable();
-    saveRowsToStorage();
+    await saveRowsToStorage();
   }
+  status(`Đã nhập xong ${files.length} tệp · ${okCount} hóa đơn mới · ${dupCount} trùng · ${failCount} lỗi`);
   const xmlNote = updatedXmlCount ? ` Đã cập nhật XML và ngày gốc cho ${updatedXmlCount} hóa đơn đã lưu.` : "";
   const dupNote = dupCount > 0 ? ` 🔁 Bỏ qua ${dupCount} hóa đơn trùng (đã có sẵn).` : "";
   const failNote = failCount > 0 ? ` ⚠️ ${failCount} file lỗi/không đọc được.` : "";
